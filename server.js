@@ -64,15 +64,39 @@ function generatePaymentRequirement(ticker, baseUrl) {
     },
     body: {
       x402Version: '2',
-      resource: resource,
-      description: `Stock sentiment analysis for ${ticker}`,
       accepts: [
         {
           scheme: 'exact',
-          network: 'eip155:8453',
-          asset: 'eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-          maxAmountRequired: '100000',
-          payTo: CONFIG.WALLET_ADDRESS
+          network: 'base',
+          asset: CONFIG.USDC_ADDRESS,
+          maxAmountRequired: CONFIG.PRICE_PER_QUERY,
+          resource: resource,
+          description: `Real-time stock sentiment analysis for ${ticker} - Returns BUY/SELL/NEUTRAL signal with confidence score`,
+          mimeType: 'application/json',
+          payTo: CONFIG.WALLET_ADDRESS,
+          maxTimeoutSeconds: 30,
+          outputSchema: {
+            input: {
+              type: 'http',
+              method: 'GET',
+              headerFields: {
+                'X-Payment': {
+                  type: 'string',
+                  required: true,
+                  description: 'x402 payment proof'
+                }
+              }
+            },
+            output: {
+              ticker: 'string',
+              signal: 'string',
+              score: 'number',
+              sentiment: 'object',
+              mentions: 'number',
+              trend: 'string',
+              timestamp: 'string'
+            }
+          }
         }
       ]
     }
