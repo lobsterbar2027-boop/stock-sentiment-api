@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const vader = require('vader-sentiment');
-const { ethers } = require('ethers');
+const { paymentMiddleware } = require('@coinbase/x402');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,81 +38,28 @@ const CONFIG = {
 const sentimentCache = new Map();
 const CACHE_DURATION = 3600000; // 1 hour in milliseconds
 
-// Helper: Validate payment header (x402 compliance)
-function validatePayment(req) {
-  const paymentHeader = req.headers['x-payment'];
-  
-  if (!paymentHeader) {
-    return { valid: false, error: 'X-PAYMENT header is required' };
+// x402 Payment Middleware Configuration
+app.use(paymentMiddleware({
+  'GET /v1/sentiment/:ticker': {
+    accepts: [
+      {
+        scheme: 'exact',
+        network: 'base',
+        asset: CONFIG.USDC_ADDRESS,
+        maxAmountRequired: CONFIG.PRICE_PER_QUERY,
+        payTo: CONFIG.WALLET_ADDRESS,
+        maxTimeoutSeconds: 30
+      }
+    ],
+    description: 'Real-time stock sentiment analysis - Returns BUY/SELL/NEUTRAL signal with confidence score',
+    mimeType: 'application/json'
   }
-
-  // In production, validate the payment signature here
-  // For now, accept any payment header for testing
-  // TODO: Implement proper x402 payment verification via facilitator
-  
-  return { valid: true };
-}
-
-// Helper: Generate payment requirement response (402)
-function generatePaymentRequirement(ticker, baseUrl) {
-  const resource = `${baseUrl}/v1/sentiment/${ticker}`;
-  
-  return {
-    statusCode: 402,
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: {
-      x402Version: 2,  // Must be number, not string!
-      accepts: [
-        {
-          scheme: 'exact',
-          network: 'base',
-          maxAmountRequired: CONFIG.PRICE_PER_QUERY,
-          resource: resource,
-          description: `Real-time stock sentiment analysis for ${ticker} - Returns BUY/SELL/NEUTRAL signal with confidence score`,
-          mimeType: 'application/json',
-          payTo: CONFIG.WALLET_ADDRESS,
-          maxTimeoutSeconds: 30,
-          asset: CONFIG.USDC_ADDRESS,
-          outputSchema: {
-            input: {
-              type: 'http',
-              method: 'GET',
-              headerFields: {
-                'X-Payment': {
-                  type: 'string',
-                  required: true,
-                  description: 'x402 payment proof'
-                }
-              }
-            },
-            output: {
-              ticker: 'string',
-              signal: 'string',
-              score: 'number',
-              sentiment: 'object',
-              mentions: 'number',
-              trend: 'string',
-              timestamp: 'string'
-            }
-          }
-        }
-      ]
-    }
-  };
-}
+}));
 
 // Helper: Scrape Reddit sentiment for a stock ticker
 async function scrapeRedditSentiment(ticker) {
   try {
-    const posts = [];
-    const searchQuery = `${ticker} stock`;
-    
-    // Simulate Reddit scraping (in production, use Reddit API or scraping)
-    // For demo purposes, we'll use mock data with realistic patterns
     const mockPosts = generateMockRedditData(ticker);
-    
     return mockPosts;
   } catch (error) {
     console.error('Reddit scraping error:', error);
@@ -120,11 +67,11 @@ async function scrapeRedditSentiment(ticker) {
   }
 }
 
-// Helper: Generate mock Reddit data (replace with real Reddit API in production)
+// Helper: Generate mock Reddit data
 function generateMockRedditData(ticker) {
   const sentiments = ['positive', 'negative', 'neutral'];
   const posts = [];
-  const numPosts = Math.floor(Math.random() * 100) + 50; // 50-150 posts
+  const numPosts = Math.floor(Math.random() * 100) + 50;
   
   for (let i = 0; i < numPosts; i++) {
     const sentiment = sentiments[Math.floor(Math.random() * sentiments.length)];
@@ -152,11 +99,9 @@ function generateMockRedditData(ticker) {
   return posts;
 }
 
-// Helper: Scrape Twitter/X sentiment (placeholder for real implementation)
+// Helper: Scrape Twitter/X sentiment
 async function scrapeTwitterSentiment(ticker) {
   try {
-    // In production: Use Twitter API v2 or scraping tool
-    // For now, return mock data
     const mockTweets = [];
     const numTweets = Math.floor(Math.random() * 50) + 20;
     
@@ -231,33 +176,13 @@ app.get('/v1/sentiment/:ticker', async (req, res) => {
     });
   }
   
-  // Validate payment (x402)
-  const paymentValidation = validatePayment(req);
-  
-  if (!paymentValidation.valid) {
-    const paymentReq = generatePaymentRequirement(tickerUpper, CONFIG.BASE_URL);
-    return res.status(402)
-      .set(paymentReq.headers)
-      .json(paymentReq.body);
-  }
-  
   try {
     // Check cache
-    const cacheKey = `${tickerUpper}_${Date.now()}`;
     const cached = sentimentCache.get(tickerUpper);
     
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
       console.log(`Serving cached data for ${tickerUpper}`);
-      return res.status(200)
-        .set({
-          'Content-Type': 'application/json',
-          'PAYMENT-RESPONSE': JSON.stringify({
-            success: true,
-            resource: `${CONFIG.BASE_URL}/v1/sentiment/${tickerUpper}`,
-            timestamp: new Date().toISOString()
-          })
-        })
-        .json(cached.data);
+      return res.status(200).json(cached.data);
     }
     
     // Scrape data from Reddit and Twitter
@@ -310,17 +235,8 @@ app.get('/v1/sentiment/:ticker', async (req, res) => {
       timestamp: Date.now()
     });
     
-    // Return with x402 payment response header
-    res.status(200)
-      .set({
-        'Content-Type': 'application/json',
-        'PAYMENT-RESPONSE': JSON.stringify({
-          success: true,
-          resource: `${CONFIG.BASE_URL}/v1/sentiment/${tickerUpper}`,
-          timestamp: new Date().toISOString()
-        })
-      })
-      .json(response);
+    // Return response
+    res.status(200).json(response);
       
   } catch (error) {
     console.error('Error processing request:', error);
@@ -353,7 +269,6 @@ app.get('/', (req, res) => {
     endpoint: '/v1/sentiment/:ticker',
     supported_tickers: CONFIG.SUPPORTED_TICKERS,
     documentation: `${CONFIG.BASE_URL}/docs`,
-    x402scan: 'Coming soon',
     contact: {
       twitter: '@BreakTheCubicle',
       github: 'https://github.com/lobsterbar2027-boop'
