@@ -60,30 +60,21 @@ function generatePaymentRequirement(ticker, baseUrl) {
   return {
     statusCode: 402,
     headers: {
-      'Content-Type': 'application/json',
-      'PAYMENT-REQUIRED': JSON.stringify({
-        maxAmountRequired: '0.1',
-        resource: resource,
-        description: `Stock sentiment analysis for ${ticker}`,
-        payTo: CONFIG.WALLET_ADDRESS,
-        asset: CONFIG.USDC_ADDRESS,
-        extra: {
-          name: 'USD Coin',
-          version: '2'
-        }
-      })
+      'Content-Type': 'application/json'
     },
     body: {
-      error: 'payment_required',
-      message: 'X-PAYMENT header is required',
-      payment: {
-        amount: '0.1',
-        currency: 'USDC',
-        network: 'Base',
-        address: CONFIG.WALLET_ADDRESS,
-        asset: CONFIG.USDC_ADDRESS,
-        resource: resource
-      }
+      x402Version: '2',
+      resource: resource,
+      description: `Stock sentiment analysis for ${ticker}`,
+      accepts: [
+        {
+          scheme: 'exact',
+          network: 'eip155:8453',
+          asset: 'eip155:8453/erc20:0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+          maxAmountRequired: '100000',
+          payTo: CONFIG.WALLET_ADDRESS
+        }
+      ]
     }
   };
 }
