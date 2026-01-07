@@ -63,7 +63,7 @@ function generatePaymentRequirement(ticker, baseUrl) {
       'Content-Type': 'application/json'
     },
     body: {
-      x402Version: '2',
+      x402Version: 2,  // Must be number, not string!
       accepts: [
         {
           scheme: 'exact',
