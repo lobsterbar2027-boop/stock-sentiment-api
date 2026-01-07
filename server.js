@@ -137,8 +137,11 @@ app.get('/v1/sentiment/:ticker', async (req, res) => {
   if (!paymentHeader) {
     const resource = `${CONFIG.BASE_URL}/v1/sentiment/${tickerUpper}`;
     
+    res.set('Content-Type', 'application/json');
+    
     return res.status(402).json({
       x402Version: 2,
+      error: 'payment_required',
       accepts: [{
         scheme: 'exact',
         network: 'base',
