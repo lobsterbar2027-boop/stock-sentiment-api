@@ -68,13 +68,13 @@ function generatePaymentRequirement(ticker, baseUrl) {
         {
           scheme: 'exact',
           network: 'base',
-          asset: CONFIG.USDC_ADDRESS,
           maxAmountRequired: CONFIG.PRICE_PER_QUERY,
           resource: resource,
           description: `Real-time stock sentiment analysis for ${ticker} - Returns BUY/SELL/NEUTRAL signal with confidence score`,
           mimeType: 'application/json',
           payTo: CONFIG.WALLET_ADDRESS,
           maxTimeoutSeconds: 30,
+          asset: CONFIG.USDC_ADDRESS,
           outputSchema: {
             input: {
               type: 'http',
